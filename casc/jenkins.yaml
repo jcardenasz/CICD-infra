@@ -1,0 +1,60 @@
+jenkins:
+  systemMessage: "Jenkins configured by JCasC for TodoApp"
+  numExecutors: 2
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: ${JENKINS_ADMIN}
+          password: "${JENKINS_ADMIN_PASSWORD}"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+      
+nodes:
+  - permanent:
+      labelString: "deploy"
+      mode: NORMAL
+      name: "deploy"
+      numExecutors: 1
+      remoteFS: "/home/vagrant/agent"
+      launcher:
+        ssh:
+          host: "${DEPLOY_HOST}"
+          port: 22
+          credentialsId: "DEPLOY_SSH"
+          launchTimeoutSeconds: 60
+          sshHostKeyVerificationStrategy:
+            manuallyTrustedKeyVerificationStrategy:
+              requireInitialManualTrust: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              id: "DOCKERHUB_CREDS"
+              scope: GLOBAL
+              username: "${DOCKERHUB_USER}"
+              password: "${DOCKERHUB_PASS}"
+              description: "Docker Hub push creds for TodoApp"
+
+          - usernamePassword:
+              id: "DB_APP_CREDS"
+              scope: GLOBAL
+              username: "${APP_DB_USER}"
+              password: "${APP_DB_PASS}"
+              description: "App DB user credentials for docker-compose .env"
+
+          - usernamePassword:
+              id: "DEPLOY_SSH"
+              scope: GLOBAL
+              username: "${DEPLOY_SSH_USER}"
+              password: "${DEPLOY_SSH_PASS}"
+              description: "SSH to deploy VM (vagrant/vagrant for assignment)"
+
+unclassified:
+  location:
+    url: "http://localhost:8080/"
