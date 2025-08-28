@@ -20,20 +20,43 @@ Vagrant.configure("2") do |config|
     sudo mkdir -p /var/jenkins_home
     sudo chown 1000:1000 /var/jenkins_home
 
+    # Pass your env vars (for JCasC ${...} resolution) into the Jenkins container
+    if [ -f /vagrant/.env ]; then
+      sudo cp /vagrant/.env /var/jenkins_home/.env
+      sudo chown 1000:1000 /var/jenkins_home/.env
+    else
+      echo "WARNING: /vagrant/.env not found. JCasC variables will be empty."
+      sudo sh -lc 'echo JENKINS_ADMIN_PASSWORD=changeme > /var/jenkins_home/.env'
+      sudo chown 1000:1000 /var/jenkins_home/.env
+    fi
+
     # If re-provisioning, remove an existing container
     docker rm -f jenkins || true
 
-    # Run Jenkins. We DO NOT mount docker.sock yet (we'll build on the agent VM).
+    # Run Jenkins with JCasC enabled and the casc dir mounted read-only
     docker run -d --name jenkins \
       -p 8080:8080 \
       -p 50000:50000 \
+      --env-file /var/jenkins_home/.env \
       -v /var/jenkins_home:/var/jenkins_home \
+      -v /vagrant/casc:/var/jenkins_home/casc:ro \
+      -e CASC_JENKINS_CONFIG=/var/jenkins_home/casc/jenkins.yaml \
       jenkins/jenkins:lts-jdk17
 
-    echo "Jenkins is starting. First-time admin password will be in /var/jenkins_home/secrets/initialAdminPassword"
+    echo "Jenkins is starting. Initial admin password (if JCasC admin not applied yet) at /var/jenkins_home/secrets/initialAdminPassword"
 
-    # ----------- VM tunnel setup --------------
-    curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output vscode_cli.tar.gz
-    tar -xf vscode_cli.tar.gz
+    # Install required plugins so JCasC can apply cleanly, then restart Jenkins
+    sleep 20
+    docker exec jenkins jenkins-plugin-cli --plugins \
+      configuration-as-code \
+      ssh-slaves \
+      credentials \
+      git \
+      github \
+      workflow-aggregator
+
+    docker restart jenkins
+
+    echo "Jenkins restarted to load plugins & apply JCasC"
   SHELL
 end
